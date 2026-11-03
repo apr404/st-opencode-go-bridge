@@ -1,18 +1,26 @@
 # st-opencode-go-bridge（TT / ST 前端扩展）
 
-给支持「经酒馆后端转发」的插件补上 OpenCode Go 要求的 `x-opencode-session` 请求头，解决 `400 MissingSessionID`。
+给酒馆插件解决 OpenCode Go 的两类问题：
+
+- 走「经酒馆后端转发」时缺 `x-opencode-session` → `400 MissingSessionID`
+- 插件自己直连 `opencode.ai` → 被 CORS 挡成 `Failed to fetch`
 
 不改第三方插件，也不让浏览器直连 opencode（那条路会被 CORS 挡）。
 
 ## 它做什么
 
-只在同源请求 `/api/backends/chat-completions/generate`（和 `/status`）上动手：
+**A. 已经走酒馆转发的请求**（同源 `/api/backends/chat-completions/generate`、`/status`）
 
-- 请求体里 `chat_completion_source === 'custom'`
-- `custom_url` 的域名是 `opencode.ai`
-- 就把 `x-opencode-session: <固定UUID>` 合并进 `custom_include_headers`
+- 请求体里 `chat_completion_source === 'custom'` 且 `custom_url` 域名是 `opencode.ai`
+- 把 `x-opencode-session: <固定UUID>` 合并进 `custom_include_headers`，原有 `Authorization` 不动
 
-已有的 `Authorization` 原样保留。session id 存在 `localStorage['st-opencode-bridge-session']`，首次生成，之后固定不变（OpenCode 只用它做路由 / 缓存亲和）。
+**B. 插件自己直连 opencode 的请求**
+
+- `POST https://opencode.ai/.../chat/completions` → 改写成酒馆后端的 custom 请求
+- `GET https://opencode.ai/.../models` → 改写成酒馆后端 `/status`
+- 原有 `Authorization` 搬进 `custom_include_headers`，再加上 session 头
+
+两条路请求最终都由酒馆后端发出，绕开 CORS。session id 存在 `localStorage['st-opencode-bridge-session']`，首次生成后固定不变。
 
 ## 安装
 
@@ -46,5 +54,6 @@ https://github.com/Apr404/st-opencode-go-bridge
 ## 边界
 
 - 只包了 `window.fetch`；用 XHR / Worker 发请求的插件管不到
+- 直连改道只处理 `chat/completions` 和 `models`；`embeddings`、`audio` 等其它路径不碰
 - 只处理 `custom` 来源；TT 原生 `opencode` 来源不需要它（后端自己会带 session）
 - `custom_include_headers` 支持 JSON 字符串、对象、YAML 文本三种写法，都能合并
