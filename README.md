@@ -39,14 +39,14 @@ https://github.com/Apr404/st-opencode-go-bridge
 - 接口地址：`https://opencode.ai/zen/go/v1`
 - 模型：`deepseek-v4.1-flash`（裸名，不要 `opencode-go/` 前缀）
 - 密钥：OpenCode 的 API Key
-- 经酒馆后端转发：✅ 必须打开
+- 经酒馆后端转发：有就打开；没有也行，v0.2 会把直连请求改道到酒馆后端
 
-> 不开「经酒馆转发」= 浏览器直连 `opencode.ai`，响应没有 `Access-Control-Allow-Origin`，会被 CORS 拦成 `Failed to fetch`。这个扩展救不了直连，它只补头、不搬请求。
+> 直连 `opencode.ai` 本身会被 CORS 挡（真实响应没有 `Access-Control-Allow-Origin`）；扩展负责把它改写成同源的酒馆请求，所以插件不用自己处理跨域。
 
 ## 排错
 
 - `400 MissingSessionID` → 扩展没生效：确认页面已 Reload、console 里有 `installed` 和 `injected` 两行日志
-- `Failed to fetch` → 没开「经酒馆转发」
+- `Failed to fetch` → 直连没被改道：确认装的是 v0.2、并且已经 Reload
 - `401` → 密钥填错，只填 key 本身，不要带 `Bearer`
 - `404 Unsupported endpoint` → 地址要对：`/zen/go/v1`（Go 套餐），不是 `/zen/v1`（按量计费）
 - 想看是否真的带上了头 → DevTools → Network 看那条 `chat-completions/generate` 的 request body：`custom_include_headers` 里应有 `x-opencode-session`
@@ -57,3 +57,10 @@ https://github.com/Apr404/st-opencode-go-bridge
 - 直连改道只处理 `chat/completions` 和 `models`；`embeddings`、`audio` 等其它路径不碰
 - 只处理 `custom` 来源；TT 原生 `opencode` 来源不需要它（后端自己会带 session）
 - `custom_include_headers` 支持 JSON 字符串、对象、YAML 文本三种写法，都能合并
+
+## Contributors
+
+- **Iris** — 扩展实现、调试、文档
+- **秋子（Apr404）** — 需求、测试、发布
+
+详见 [CONTRIBUTORS.md](CONTRIBUTORS.md)。
