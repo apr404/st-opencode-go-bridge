@@ -1,6 +1,6 @@
 # st-opencode-go-bridge（TT / ST 前端扩展）
 
-给 **BakemonoMemory（类脑记忆）** 这类支持「经酒馆后端转发」的插件补上 OpenCode Go 要求的 `x-opencode-session` 请求头，解决 `400 MissingSessionID`。
+给支持「经酒馆后端转发」的插件补上 OpenCode Go 要求的 `x-opencode-session` 请求头，解决 `400 MissingSessionID`。
 
 不改第三方插件，也不让浏览器直连 opencode（那条路会被 CORS 挡）。
 
@@ -16,22 +16,22 @@
 
 ## 安装
 
-1. 把 `manifest.json`、`index.js`、`README.md` 传到 GitHub（仓库必须 **public**）
-2. 酒馆 → Extensions → Install extension → 粘贴仓库地址
-3. Reload
+酒馆 → Extensions → Install extension → 粘贴仓库地址：
+
+```
+https://github.com/Apr404/st-opencode-go-bridge
+```
+
+然后 Reload。
 
 装好后 console 会有一行 `[st-opencode-go-bridge] installed; session = …`。
 
-## 插件那边怎么填
+## 自定义 API 怎么填
 
-以 BakemonoMemory 的自定义 API 为例：
-
-```
-自定义接口地址   https://opencode.ai/zen/go/v1
-模型             deepseek-v4.1-flash     ← 裸名，不要 opencode-go/ 前缀
-密钥             OpenCode 的 API Key
-经酒馆后端转发   ✅ 必须打开
-```
+- 接口地址：`https://opencode.ai/zen/go/v1`
+- 模型：`deepseek-v4.1-flash`（裸名，不要 `opencode-go/` 前缀）
+- 密钥：OpenCode 的 API Key
+- 经酒馆后端转发：✅ 必须打开
 
 > 不开「经酒馆转发」= 浏览器直连 `opencode.ai`，响应没有 `Access-Control-Allow-Origin`，会被 CORS 拦成 `Failed to fetch`。这个扩展救不了直连，它只补头、不搬请求。
 
