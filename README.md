@@ -20,7 +20,15 @@
 - `GET https://opencode.ai/.../models` → 改写成酒馆后端 `/status`
 - 原有 `Authorization` 搬进 `custom_include_headers`，再加上 session 头
 
-两条路请求最终都由酒馆后端发出，绕开 CORS。session id 存在 `localStorage['st-opencode-bridge-session']`，首次生成后固定不变。
+两条路请求最终都由酒馆后端发出，绕开 CORS。
+
+## 每个插件独立的 session
+
+- 从调用栈认出是哪个第三方扩展发的请求（`/extensions/third-party/<名字>/`），按插件各生成一个固定 UUID
+- 存在 `localStorage['st-opencode-bridge-sessions']`，卸载重装也不变
+- console 会打印 `new session for plugin <名字> = <uuid>`，发请求时也会带 `from <名字>`
+- 查看当前映射：在 console 里执行 `__ST_OPENCODE_BRIDGE_SESSIONS__()`
+- 认不出插件时（Worker / 内联脚本）用全局的默认 UUID
 
 ## 安装
 

@@ -4,6 +4,7 @@
 // 2) 插件自己直连 opencode.ai 的 chat/completions 或 models，改道到酒馆后端（浏览器直连会被 CORS 挡）。
 
 const SESSION_KEY = 'st-opencode-bridge-session';
+const SESSION_MAP_KEY = 'st-opencode-bridge-sessions';
 const OPENCODE_HOSTS = ['opencode.ai', 'www.opencode.ai'];
 const TAVERN_PATHS = ['/api/backends/chat-completions/generate', '/api/backends/chat-completions/status'];
 const CHAT_PATH = '/api/backends/chat-completions/generate';
@@ -65,6 +66,41 @@ function getSessionId() {
     } catch {
         return 'st-opencode-go-bridge';
     }
+}
+
+function readSessionMap() {
+    try {
+        const raw = localStorage.getItem(SESSION_MAP_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+
+function saveSessionMap(map) {
+    try { localStorage.setItem(SESSION_MAP_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+}
+
+// 从调用栈里认出是哪个第三方扩展发的请求：/extensions/third-party/<名字>/...
+export function pluginFromStack(stack) {
+    const match = /\/third-party\/([^/\s?#]+)\//i.exec(String(stack || ''));
+    if (!match) return '';
+    try { return decodeURIComponent(match[1]); } catch { return match[1]; }
+}
+
+// 每个插件一个固定 UUID；认不出插件时用全局的那个。
+export function sessionForPlugin(plugin, fallback) {
+    if (!plugin) return fallback;
+    const map = readSessionMap();
+    if (!map[plugin]) {
+        map[plugin] = crypto.randomUUID
+            ? crypto.randomUUID()
+            : `tt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        saveSessionMap(map);
+        log('new session for plugin', plugin, '=', map[plugin]);
+    }
+    return map[plugin];
 }
 
 // 酒馆同一个 POST 路由要 CSRF（ST 浏览器版）；TT 没有，但带上也无害。
@@ -135,7 +171,7 @@ function openCodeBase(url) {
 }
 
 // 直连 opencode 的请求改道到酒馆后端。返回 {input, init} 或 null。
-export function rewriteDirectRequest(input, init, sessionId) {
+export function rewriteDirectRequest(input, init, sessionId, plugin = '') {
     if (typeof input !== 'string') return null;
 
     let url;
@@ -173,7 +209,7 @@ export function rewriteDirectRequest(input, init, sessionId) {
         }
         if (Object.keys(extras).length) dto.custom_include_body = JSON.stringify(extras);
 
-        log('rerouted direct chat request to tavern backend');
+        log('rerouted direct chat request to tavern backend', plugin ? `from ${plugin}` : '');
         return {
             input: CHAT_PATH,
             init: {
@@ -186,7 +222,7 @@ export function rewriteDirectRequest(input, init, sessionId) {
     }
 
     if (method === 'GET' && /\/models\/?$/i.test(url.pathname)) {
-        log('rerouted direct models request to tavern backend');
+        log('rerouted direct models request to tavern backend', plugin ? `from ${plugin}` : '');
         return {
             input: STATUS_PATH,
             init: {
@@ -206,14 +242,14 @@ export function rewriteDirectRequest(input, init, sessionId) {
 }
 
 // 酒馆后端请求：只补 session 头。
-export function rewriteRequest(input, init, sessionId) {
+export function rewriteRequest(input, init, sessionId, plugin = '') {
     if (!init || String(init.method || 'GET').toUpperCase() !== 'POST') return null;
     if (!isTavernEndpoint(input)) return null;
 
     const body = rewriteRequestBody(init.body, sessionId);
     if (!body || typeof body !== 'string') return null;
 
-    log('injected x-opencode-session into', String(input));
+    log('injected x-opencode-session into', String(input), plugin ? `from ${plugin}` : '');
     return { input, init: { ...init, body } };
 }
 
@@ -223,13 +259,15 @@ function install() {
     window.__OPENCODE_GO_BRIDGE__ = true;
 
     const originalFetch = window.fetch.bind(window);
-    const sessionId = getSessionId();
+    const defaultSession = getSessionId();
 
     window.fetch = function bridgedFetch(input, init) {
         try {
-            const direct = rewriteDirectRequest(input, init, sessionId);
+            const plugin = pluginFromStack(new Error().stack);
+            const sessionId = sessionForPlugin(plugin, defaultSession);
+            const direct = rewriteDirectRequest(input, init, sessionId, plugin);
             if (direct) return originalFetch(direct.input, direct.init);
-            const rewritten = rewriteRequest(input, init, sessionId);
+            const rewritten = rewriteRequest(input, init, sessionId, plugin);
             if (rewritten) return originalFetch(rewritten.input, rewritten.init);
         } catch (error) {
             log('rewrite failed, passing through:', error);
@@ -237,7 +275,8 @@ function install() {
         return originalFetch(input, init);
     };
 
-    log('installed; session =', sessionId);
+    window.__ST_OPENCODE_BRIDGE_SESSIONS__ = () => readSessionMap();
+    log('installed; default session =', defaultSession);
 }
 
 if (typeof window !== 'undefined') {
