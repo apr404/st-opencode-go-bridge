@@ -35,7 +35,7 @@
 酒馆 → Extensions → Install extension → 粘贴仓库地址：
 
 ```
-https://github.com/Apr404/st-opencode-go-bridge
+https://github.com/h4i0x/st-opencode-go-bridge
 ```
 
 然后 Reload。
